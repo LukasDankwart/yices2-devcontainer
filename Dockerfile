@@ -26,6 +26,8 @@ RUN git clone https://github.com/SRI-CSL/yices2_python_bindings.git
 WORKDIR /opt/yices2_python_bindings
 RUN pip3 install .
 
+RUN pip install onnx onnxruntime numpy
+
 WORKDIR /workspace
 
 CMD ["/bin/bash"]
