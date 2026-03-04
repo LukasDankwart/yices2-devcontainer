@@ -1,11 +1,11 @@
+import numpy as np
 import onnx
 from onnx import numpy_helper, shape_inference
-from utils import run_yices_on_smt, clean_name, format_smt_number
+from utils import *
 
 
 def get_input_dims(node):
     dims = []
-    print(node)
     if node.type.tensor_type.HasField("shape"):
         for d in node.type.tensor_type.shape.dim:
             if d.HasField("dim_value"):
@@ -258,6 +258,7 @@ def add_bounds_to_smt(smt_path, input_vars, output_vars, input_bounds=None, outp
                 dst.write(line)
                 # Space for input bounds found
                 if "; --- INPUT BOUNDS --- " in line:
+                    # If input bounds are given, they are mapped to each input var name
                     if input_bounds is not None:
                         assert len(input_vars) == len(
                             input_bounds), "Given input bounds do not match to given input vars."
@@ -271,6 +272,7 @@ def add_bounds_to_smt(smt_path, input_vars, output_vars, input_bounds=None, outp
                             dst.write(f"(assert (>= {var_name} {ub}))\n")
                 # Space four output bounds found
                 elif "; --- OUTPUT BOUNDS --- " in line:
+                    # If output bounds are given, they are mapped to each output var name
                     if output_bounds is not None:
                         assert len(output_vars) == len(
                             output_bounds), "Given output bounds do not match to given output vars."
@@ -288,22 +290,186 @@ def add_bounds_to_smt(smt_path, input_vars, output_vars, input_bounds=None, outp
         print(f"File {smt_path} not found.")
         return False
 
+def onnx_to_smt_function(onnx_path, smt2_path):
+    model = onnx.load(onnx_path)
+    model = shape_inference.infer_shapes(model)
+    graph = model.graph
+
+    # Graph data
+    network_input_shapes = get_network_input_shapes(graph)
+    node_data = compute_node_shapes(model)
+
+    function_params = []
+    input_var_names = []
+
+    for node in graph.input:
+        name = clean_name(node.name)
+        dim = network_input_shapes.get(name, [1])[0]
+        for i in range(dim):
+            var_name = f"{name}_{i}"
+            input_var_names.append(var_name)
+            function_params.append(f"({var_name} Real)")
+
+    initializers = {}
+    for init in graph.initializer:
+        initializers[clean_name(init.name)] = numpy_helper.to_array(init)
+
+    computation_steps = []
+
+    previous_vars = input_var_names[:]
+
+    for node in graph.node:
+        op_type = node.op_type
+        inputs = [clean_name(i) for i in node.input]
+        outputs = [clean_name(o) for o in node.output]
+        out_name = outputs[0]
+
+        input_shape = node_data.get(clean_name(node.name), None)["input_shapes"][0][0]
+        output_shape = node_data.get(clean_name(node.name), None)["output_shapes"][0][0]
+
+        tmp_intermediates = []
+
+        # --- Add parsing ---
+        if op_type.lower() == "add":
+            for i in range(output_shape):
+                val_a = get_operand(inputs[0], i, initializers)
+                val_b = get_operand(inputs[1], i, initializers)
+
+                var_id = f"{out_name}_{i}"
+                expr = f"(+ {val_a} {val_b})"
+                computation_steps.append((var_id, expr))
+                tmp_intermediates.append(var_id)
+            previous_vars = tmp_intermediates
+
+        # --- MatMul parsing ---
+        elif op_type.lower() == "matmul":
+            if inputs[1] in initializers:
+                W = initializers[inputs[1]]
+            else:
+                print(f"SKIP Gemm: Gewichte für {inputs[1]} nicht gefunden")
+                continue
+
+            B = None
+            if len(inputs) > 2 and inputs[2] in initializers:
+                B = initializers[inputs[2]]
+
+            rows, cols = W.shape
+
+            for j in range(cols):
+                var_id = f"{out_name}_{j}"
+                terms = []
+                for i in range(rows):
+                    w_str = format_smt_number(W[i][j])
+                    in_var = f"{inputs[0]}_{i}"
+                    terms.append(f"(* {w_str} {in_var})")
+
+                sum_expr = " ".join(terms) if terms else "0.0"
+
+                bias_val = 0.0
+                if B is not None:
+                    bias_val = B[j] if j < len(B) else 0.0
+                b_str = format_smt_number(bias_val)
+
+                if terms:
+                    expr = f"(+ (+ {sum_expr}) {b_str})"
+                else:
+                    expr = b_str
+
+                computation_steps.append((var_id, expr))
+                tmp_intermediates.append(var_id)
+
+            previous_vars = tmp_intermediates
+
+        # --- ReLU parsing ---
+        elif op_type.lower() == "relu":
+            in_name = inputs[0]
+            for i in range(output_shape):
+                var_id = f"{out_name}_{i}"
+                # Referenz auf vorherigen Wert
+                prev_val = f"{in_name}_{i}"
+                expr = f"(ite (> {prev_val} 0.0) {prev_val} 0.0)"
+
+                computation_steps.append((var_id, expr))
+                tmp_intermediates.append(var_id)
+            previous_vars = tmp_intermediates
+
+        else:
+            print(f"Warning: OpType {op_type} not supported/implemented yet.")
+
+    with open(smt2_path, 'w') as f:
+        f.write("(set-logic LRA)\n")
+
+
+        final_layer_vars = previous_vars
+
+        for out_idx, out_var_name in enumerate(final_layer_vars):
+            func_name = f"run_network_out_{out_idx}"
+            params_str = " ".join(function_params)
+
+            f.write(f"; --- Function for Output {out_idx} ---\n")
+            f.write(f"(define-fun {func_name} ({params_str}) Real\n")
+
+
+            indent = "  "
+            for var_name, expr in computation_steps:
+                f.write(f"{indent}(let (({var_name} {expr}))\n")
+                indent += " "
+
+            f.write(f"{indent}{out_var_name}\n")
+
+            for _ in computation_steps:
+                f.write(")")
+            f.write(")\n")
+            f.write("\n")
+
+        f.write("; --- Network Functions Defined ---\n")
+        f.write("; Jetzt kannst du manuell deine ExistsForAll Constraints hinzufügen.\n")
+        f.write("; Beispiel: (assert (forall ((y Real)) ... (run_network_out_0 ... y ...)))\n")
+
+
 def main():
     input_path = "subprocesses/networks/concrete/classifier_medium.onnx"
     output_path = "subprocesses/formulas/classifier_medium.smt2"
+
+    onnx_to_smt_function(input_path, "subprocesses/ef/classifier_medium_function.smt2")
+
+    """
     input_vars, output_vars = onnx_to_smt2(input_path, output_path)
+
+    onnx_input, onnx_output = perform_onnx_runtime(input_path)
+
     # Define Dummy input and output bounds
     input_bounds = {}
-    for input_var in input_vars:
-        input_bounds[input_var] = {"lb": 0.0, "ub": 1.0}
+    for idx in range(len(input_vars)):
+        input_bounds[input_vars[idx]] = {"lb": onnx_input[idx], "ub": onnx_input[idx]}
 
     # Output bounds
-    output_bounds = {}
-    for output_var in output_vars:
-        output_bounds[output_var] = {"lb": 1.0, "ub": 1.0}
+    #output_bounds = {}
+    #for idx in range(len(output_vars)):
+    #   output_bounds[output_vars[idx]] = {"lb": onnx_output[idx], "ub": onnx_output[idx]}
 
-    add_bounds_to_smt(output_path, input_vars, output_vars, input_bounds=input_bounds, output_bounds=output_bounds)
+    add_bounds_to_smt(output_path, input_vars, output_vars, input_bounds=input_bounds, output_bounds=None)
+
+    results = run_yices_on_smt("subprocesses/formulas/classifier_medium_bounded.smt2")
+    results = parse_yices_results(results, input_vars, output_vars)
+    equal = compare_yices_to_onnx(results, input_vars, output_vars, onnx_input, onnx_output)
+
+    if results["status"] == "sat":
+        input_assignment = []
+        output_assignment = []
+        for var in input_vars:
+            input_assignment.append(results.get("model").get(var))
+        for var in output_vars:
+            output_assignment.append(results.get("model").get(var))
+
+        input_assignment = np.array(input_assignment)
+        output_assignment = np.array(output_assignment)
+
+        print(f"YICES INPUT: {input_assignment}")
+        print(f"ONNX INPUT: {onnx_input} \n")
+        print(f"YICES OUTPUT: {output_assignment}")
+        print(f"ONNX OUTPUT: {onnx_output} \n")
+    """
 
 if __name__ == "__main__":
-    # TODO: VALIDIERUNGSSKRIPT das ONNXRUNTIME EINGABE/AUSGABE auf dem Netz mit dem von YICES AUF SMT ENCODING vergleicht
     main()
