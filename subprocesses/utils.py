@@ -79,8 +79,6 @@ def compare_yices_to_onnx(yices_results, input_vars, output_vars, onnx_input, on
 
 def parse_smt_value(value_str):
     """
-    Wandelt SMT-LIB Strings in Python-Werte um.
-    Beispiele:
       "true" -> True
       "42" -> 42.0
       "(- 42)" -> -42.0
