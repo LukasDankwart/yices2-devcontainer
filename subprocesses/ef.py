@@ -4,7 +4,7 @@ import utils
 from subprocesses.utils import run_yices_on_smt, parse_yices_results
 
 if __name__ == "__main__":
-    smt_path = "subprocesses/ef/classifier_medium_ef_minimized.smt2"
+    smt_path = "subprocesses/ef/classifier_medium_ef.smt2"
 
     results = run_yices_on_smt(smt_path)
     res_vars = ["r0", "r1", "r2", "r3", "r4", "r5", "r6"]

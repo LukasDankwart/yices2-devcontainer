@@ -28,6 +28,8 @@ RUN pip3 install .
 
 RUN pip install onnx onnxruntime numpy
 
+RUN pip install maraboupy
+
 WORKDIR /workspace
 
 CMD ["/bin/bash"]
