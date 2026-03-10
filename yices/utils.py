@@ -40,6 +40,7 @@ def parse_yices_results(results, input_vars, output_vars):
         return {"status": "sat", "model": model_data}
     else:
         print(f"Unknown Yices output: \n{output}")
+        return {"status": "unknown", "model": None}
 
 
 def compare_yices_to_onnx(yices_results, input_vars, output_vars, onnx_input, onnx_output, atol=1e-3, rtol=1e-3):
@@ -149,5 +150,23 @@ def perform_onnx_runtime(onnx_file_path):
     onnx_output = ort_session.run(None, {'onnx::MatMul_0': dummy_input})
 
     return dummy_input, onnx_output[0]
+
+def add_distance_condition(path, distance, iteration):
+    new_path = path.removesuffix(".smt2") + f"_{iteration}.smt2"
+    try:
+        with open(path, 'r') as src, open(new_path, 'w') as dst:
+            dist_added = False
+            for line in src:
+                dst.write(line)
+
+                if "; --- Define distance condition" in line:
+                    dst.write(f"(assert (<= total_distance {distance})) \n")
+                    dist_added = True
+            if not dist_added:
+                ValueError(f"Given SMT file does not contain area for distance expression.")
+            return new_path
+    except FileNotFoundError:
+        raise RuntimeError(f"File at '{new_path}' not found.")
+
 
 

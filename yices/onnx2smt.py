@@ -423,15 +423,13 @@ def onnx_to_smt_function(onnx_path, smt2_path):
             f.write("\n")
 
         f.write("; --- Network Functions Defined ---\n")
-        f.write("; Jetzt kannst du manuell deine ExistsForAll Constraints hinzufügen.\n")
-        f.write("; Beispiel: (assert (forall ((y Real)) ... (run_network_out_0 ... y ...)))\n")
 
 
 def main():
-    input_path = "subprocesses/networks/concrete/classifier_medium.onnx"
-    output_path = "subprocesses/formulas/classifier_medium.smt2"
+    input_path = "yices/networks/concrete/classifier_medium.onnx"
+    output_path = "yices/formulas/classifier_medium.smt2"
 
-    onnx_to_smt_function(input_path, "subprocesses/ef/classifier_medium_function.smt2")
+    onnx_to_smt_function(input_path, "yices/ef/classifier_medium_base.smt2")
 
     """
     input_vars, output_vars = onnx_to_smt2(input_path, output_path)
@@ -450,7 +448,7 @@ def main():
 
     add_bounds_to_smt(output_path, input_vars, output_vars, input_bounds=input_bounds, output_bounds=None)
 
-    results = run_yices_on_smt("subprocesses/formulas/classifier_medium_bounded.smt2")
+    results = run_yices_on_smt("yices/formulas/classifier_medium_bounded.smt2")
     results = parse_yices_results(results, input_vars, output_vars)
     equal = compare_yices_to_onnx(results, input_vars, output_vars, onnx_input, onnx_output)
 

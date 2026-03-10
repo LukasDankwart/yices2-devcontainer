@@ -5,14 +5,17 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     build-essential \
     autoconf \
+    cmake \
     gperf \
     git \
+    wget \
     libgmp-dev \
     python3 \
     python3-pip \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# =========== YICES2 ============
 WORKDIR /opt
 RUN git clone https://github.com/SRI-CSL/yices2.git
 WORKDIR /opt/yices2
@@ -26,7 +29,20 @@ RUN git clone https://github.com/SRI-CSL/yices2_python_bindings.git
 WORKDIR /opt/yices2_python_bindings
 RUN pip3 install .
 
-RUN pip install onnx onnxruntime numpy
+# ========== ONNX / ONNXRUNTIME / NUMPY / Z3 =========
+RUN pip install --no-cache-dir z3-solver onnx onnxruntime numpy protobuf
+
+# =========== Marabou ============
+WORKDIR /opt
+RUN git clone https://github.com/NeuralNetworkVerification/Marabou.git
+
+# Copy c++ script INTO main.cpp of marabou
+#COPY onnx2smt.cpp /opt/Marabou/src/main.cpp
+
+WORKDIR /opt/Marabou/build
+RUN cmake .. && cmake --build . -j 4
+
+ENV PYTHONPATH="/opt/Marabou"
 
 WORKDIR /workspace
 
