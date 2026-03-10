@@ -44,6 +44,8 @@ RUN cmake .. && cmake --build . -j 4
 
 ENV PYTHONPATH="/opt/Marabou"
 
+RUN pip install maraboupy
+
 WORKDIR /workspace
 
 CMD ["/bin/bash"]
