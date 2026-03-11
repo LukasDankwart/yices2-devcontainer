@@ -1,10 +1,10 @@
 import numpy as np
 import onnxruntime as ort
 import utils
-from yices.utils import run_yices_on_smt, parse_yices_results
+from utils import run_yices_on_smt, parse_yices_results
 
 if __name__ == "__main__":
-    smt_path = "yices/ef/classifier_medium_ef.smt2"
+    smt_path = "yices_ws/ef/classifier_medium_ef.smt2"
 
     results = run_yices_on_smt(smt_path)
     res_vars = ["r0", "r1", "r2", "r3", "r4", "r5", "r6"]
@@ -31,7 +31,7 @@ if __name__ == "__main__":
     x_input = np.array(x_input).astype(np.float32) + np.array(residuals).astype(np.float32)
     print(x_input)
 
-    ort_session = ort.InferenceSession("yices/networks/concrete/classifier_medium.onnx")
+    ort_session = ort.InferenceSession("yices_ws/networks/concrete/classifier_medium.onnx")
     y_values = [x / 10 for x in range(-10, 11)]
     for y in y_values:
         x_input[-1] = y

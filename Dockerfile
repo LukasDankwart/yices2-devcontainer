@@ -33,14 +33,14 @@ RUN pip3 install .
 RUN pip install --no-cache-dir z3-solver onnx onnxruntime numpy protobuf
 
 # =========== Marabou ============
-WORKDIR /opt
-RUN git clone https://github.com/NeuralNetworkVerification/Marabou.git
+#WORKDIR /opt
+#RUN git clone https://github.com/NeuralNetworkVerification/Marabou.git
 
 # Copy c++ script INTO main.cpp of marabou
-#COPY onnx2smt.cpp /opt/Marabou/src/main.cpp
+#COPY marabou/onnx2smt.cpp /opt/Marabou/src/main.cpp
 
-WORKDIR /opt/Marabou/build
-RUN cmake .. && cmake --build . -j 4
+#WORKDIR /opt/Marabou/build
+#RUN cmake .. && cmake --build . -j 4
 
 ENV PYTHONPATH="/opt/Marabou"
 

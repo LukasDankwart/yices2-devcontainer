@@ -11,7 +11,7 @@ def test():
         """
 
     results = subprocess.run(
-        ['yices-smt2'],
+        ['yices_ws-smt2'],
         input=smt_code,
         text=True,
         capture_output=True,
@@ -54,7 +54,7 @@ def adv_example():
     """
 
     results = subprocess.run(
-        ['yices-smt2'],
+        ['yices_ws-smt2'],
         input=smt_code,
         text=True,
         capture_output=True,

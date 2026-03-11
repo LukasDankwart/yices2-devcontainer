@@ -3,7 +3,7 @@ import subprocess
 
 
 if __name__ == "__main__":
-    onnx_path = "yices/networks/concrete/classifier_medium.onnx"
+    onnx_path = "yices_ws/networks/concrete/classifier_medium.onnx"
     smt_path = "test_output.smt2"
 
     print(f"Start converting....")

@@ -1,7 +1,7 @@
-from utils import *
+from yices_ws.utils import *
 import numpy as np
 import onnxruntime as ort
-
+import time
 def binary_search(path, initial_ub=100.0):
     target_vars = ["r0", "r1", "r2", "r3", "r4", "r5", "r6"]
 
@@ -27,9 +27,9 @@ def binary_search(path, initial_ub=100.0):
         elif results["status"] == "sat":
             # Fetch assignment and compute distance
             new_res = [results["model"].get(target) for target in target_vars]
-            new_distance = sum(abs(np.array(new_res)))
+            new_distance = np.sum(np.abs(np.array(new_res)))
             # Store new assignment and set upper bound to found minimal distance
-            ub = new_distance
+            ub = min(mb, new_distance)
             minimal_res = new_res
         elif results["status"] == "unsat":
             # No new better cx was found, just lift up the lower bound to the mid value
@@ -38,10 +38,14 @@ def binary_search(path, initial_ub=100.0):
     return minimal_res
 
 def main():
-    path = "yices/binary_search/classifier_medium_binarysearch.smt2"
+    path = "yices_ws/binary_search/classifier_medium_binarysearch.smt2"
+    bs_start = time.perf_counter()
     minimal_r = binary_search(path, initial_ub=100.0)
+    bs_end = time.perf_counter()
+    print(f"Binary search time on 'StandardSMT-Parser' Variant: {(bs_end - bs_start):.5f}")
     print("Binary search finished! CX with minimal distance: \n")
     print(minimal_r)
+    print(f"Distance: {np.sum(np.abs(np.array(minimal_r)))} \n")
     minimal_r = np.append(minimal_r, 0.0)
     minimal_r = np.array(minimal_r, dtype=np.float32)
     x_input = [
@@ -55,7 +59,7 @@ def main():
         -0.361468
     ]
     x_input = np.array(x_input, dtype=np.float32)
-    ort_session = ort.InferenceSession("yices/networks/concrete/classifier_medium.onnx")
+    ort_session = ort.InferenceSession("yices_ws/networks/concrete/classifier_medium.onnx")
     onnx_output = ort_session.run(None, {'onnx::MatMul_0': x_input})
     onnx_class_pred = np.argmax(onnx_output[0])
     print(f"ONNX run on original input 'x' is classified: {onnx_class_pred} \n")

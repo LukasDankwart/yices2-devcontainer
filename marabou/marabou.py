@@ -16,6 +16,6 @@ if __name__ == "__main__":
     print("marabou erfolgreich geladen!")
 
 
-    network = Marabou.read_onnx("yices/networks/concrete/classifier_medium.onnx")
+    network = Marabou.read_onnx("yices_ws/networks/concrete/classifier_medium.onnx")
     network.getInputQuery().saveQueryAsSmtLib("test_output.smt2")
     print(f"worked")

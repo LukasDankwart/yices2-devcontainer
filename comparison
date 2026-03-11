@@ -1,0 +1,50 @@
+# comparison between binary search with yices on
+# 1. SMT lib parsed in standard way (onnx2smt.py in yices_ws)
+# 2. Z3 based SMT parsing (smt_parser.py in z3_examples)
+
+# 1. Results:
+Formula is SAT.
+Formula is SAT.
+Formula is SAT.
+Formula is UNSAT.
+Formula is UNSAT.
+Formula is UNSAT.
+Formula is SAT.
+Formula is UNSAT.
+Formula is UNSAT.
+Formula is UNSAT.
+Formula is UNSAT.
+Formula is SAT.
+Formula is SAT.
+Formula is SAT.
+Formula is UNSAT.
+Formula is UNSAT.
+=> 16 iterations
+[4.1317088197411085, 2.60075826144464e-05, 0.0, 0.0, 2.60075826144464e-05, 0.0, -5.20151652288928e-05]
+distance: 4.131812850071567
+in 117.60753 seconds
+last distance search: (assert (<= total_distance 4.131272884983998))
+
+# 2. Results:
+Formula is SAT.
+Formula is SAT.
+Formula is SAT.
+Formula is SAT.
+Formula is UNSAT.
+Formula is SAT.
+Formula is SAT.
+Formula is SAT.
+Formula is SAT.
+Formula is UNSAT.
+Formula is SAT.
+Formula is UNSAT.
+Formula is SAT.
+Formula is SAT.
+Formula is UNSAT.
+Formula is UNSAT.
+Formula is SAT.
+=> 17 iterations
+[4.1317948130946025, 0.0, 0.0, 0.0, 0.000494552296061672, 0.0, 0.0]
+distance: 4.1322893653906645
+in 78.48697 seconds
+last distance search: (<= total_distance 4.132289365390664))
