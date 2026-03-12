@@ -1,0 +1,32 @@
+(set-logic LRA)
+ 
+(define-fun OutputNeuron_0_idx0 ((onnx__MatMul_0_0 Real) (onnx__MatMul_0_1 Real) (onnx__MatMul_0_2 Real) (onnx__MatMul_0_3 Real) (onnx__MatMul_0_4 Real) (onnx__MatMul_0_5 Real) (onnx__MatMul_0_6 Real) (onnx__MatMul_0_7 Real) (onnx__MatMul_0_8 Real) (onnx__MatMul_0_9 Real) (onnx__MatMul_0_10 Real)) Real
+  (+ (- (/ 334669.0 1000000.0))
+   (* (- (/ 25993.0 200000.0)) onnx__MatMul_0_0)
+   (* (- (/ 3084887.0 1000000.0)) onnx__MatMul_0_1)
+   (* (- (/ 22959.0 125000.0)) onnx__MatMul_0_2)
+   (* (/ 1667197.0 1000000.0) onnx__MatMul_0_3)
+   (* (- (/ 588861.0 1000000.0)) onnx__MatMul_0_4)
+   (* (/ 1207403.0 1000000.0) onnx__MatMul_0_5)
+   (* (- (/ 217029.0 200000.0)) onnx__MatMul_0_6)
+   (* (- (/ 748659.0 1000000.0)) onnx__MatMul_0_7)
+   (* (/ 14551.0 125000.0) onnx__MatMul_0_8)
+   (* (/ 18019.0 12500.0) onnx__MatMul_0_9)
+   (* (/ 2968057.0 1000000.0) onnx__MatMul_0_10))
+)
+
+(define-fun OutputNeuron_0_idx1 ((onnx__MatMul_0_0 Real) (onnx__MatMul_0_1 Real) (onnx__MatMul_0_2 Real) (onnx__MatMul_0_3 Real) (onnx__MatMul_0_4 Real) (onnx__MatMul_0_5 Real) (onnx__MatMul_0_6 Real) (onnx__MatMul_0_7 Real) (onnx__MatMul_0_8 Real) (onnx__MatMul_0_9 Real) (onnx__MatMul_0_10 Real)) Real
+  (+ (/ 12179.0 62500.0)
+   (* (- (/ 26347.0 200000.0)) onnx__MatMul_0_0)
+   (* (/ 2869749.0 1000000.0) onnx__MatMul_0_1)
+   (* (/ 15157.0 250000.0) onnx__MatMul_0_2)
+   (* (- (/ 998141.0 500000.0)) onnx__MatMul_0_3)
+   (* (/ 73781.0 250000.0) onnx__MatMul_0_4)
+   (* (- (/ 1515559.0 1000000.0)) onnx__MatMul_0_5)
+   (* (/ 700537.0 500000.0) onnx__MatMul_0_6)
+   (* (/ 396701.0 1000000.0) onnx__MatMul_0_7)
+   (* (- (/ 243497.0 1000000.0)) onnx__MatMul_0_8)
+   (* (- (/ 659593.0 500000.0)) onnx__MatMul_0_9)
+   (* (- (/ 67753.0 25000.0)) onnx__MatMul_0_10))
+)
+

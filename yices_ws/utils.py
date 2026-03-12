@@ -201,5 +201,8 @@ def add_distance_condition(path, distance, iteration):
         raise RuntimeError(f"File at '{new_path}' not found.")
 
 
+def add_inference_conditions(path, inference_input):
+    """ Expects SMT file to have ';--- NetworkFinished---' line, marking start of area for further conditions."""
+
 
 

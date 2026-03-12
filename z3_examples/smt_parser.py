@@ -71,7 +71,7 @@ def onnx2smt(onnx_path, smt_path):
             if transB: B = B.T
             out = alpha * np.matmul(inp, weights) + beta * biases
         else:
-            raise ValueError(f"Current node-optype is not supported!")
+            raise ValueError(f"Current node-optype '{node.op_type}' is not supported!")
 
         intermediate_tensors[clean_name(node.output[0])] = out
 
@@ -84,7 +84,7 @@ def onnx2smt(onnx_path, smt_path):
 
         # Build a input string holding all input vars (z3 real inputs of the network)
         input_args_str = " ".join([f"({var.sexpr()} Real)" for var in input_vars])
-
+        func_names = []
         for out_idx, out_name in enumerate(out_names):
             final_tensor = intermediate_tensors[out_name].flatten()
 
@@ -92,9 +92,14 @@ def onnx2smt(onnx_path, smt_path):
                 simplified_expr = z3.simplify(neuron_expr)
                 math_string = simplified_expr.sexpr()
                 func_name = f"OutputNeuron_{out_idx}_idx{i}"
+                func_names.append(func_name)
                 f.write(f"(define-fun {func_name} ({input_args_str}) Real\n")
                 f.write(f"  {math_string}\n")
                 f.write(f")\n\n")
+        f.write("; --- OutputFunctions --- \n")
+        for (idx, func_name) in enumerate(func_names):
+            f.write(f"; Output_{idx}: {func_name} \n")
+        f.write("; --- NetworkFinished --- \n")
 
     print(f"SMT file stored at {smt_path}")
 
