@@ -212,6 +212,6 @@
 (define-fun total_distance () Real
   (+ (abs r0) (abs r1) (abs r2) (abs r3) (abs r4) (abs r5) (abs r6)))
 ; --- Define distance condition
-(assert (<= total_distance 4.218560478109353)) 
+(assert (<= total_distance 4.060119902250993)) 
 (check-sat)
 (get-model)

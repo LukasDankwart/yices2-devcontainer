@@ -3,6 +3,8 @@ import re
 import numpy as np
 import onnxruntime as ort
 import onnx
+from z3 import *
+
 
 def run_yices_on_smt(smt_path):
     try:
@@ -14,6 +16,36 @@ def run_yices_on_smt(smt_path):
         return results
     except FileNotFoundError:
         print(f"{smt_path} not found or not valid.")
+
+def run_z3_on_smt(smt_path, target_vars=None):
+    s = Solver()
+    s.from_file(smt_path)
+
+    result = s.check()
+    print(f"Status: {result}")
+
+    if result != sat:
+        return {"status": "unsat"}
+
+    m = s.model()
+    extracted_values = {"status": "sat"}
+
+    for d in m.decls():
+        name = d.name()
+
+        if name in target_vars:
+            val = m[d]
+
+            if is_rational_value(val):
+                num = val.numerator_as_long()
+                den = val.denominator_as_long()
+                extracted_values[name] = num / den
+            elif is_int_value(val):
+                extracted_values[name] = val.as_long()
+            else:
+                extracted_values[name] = str(val)
+
+    return extracted_values
 
 def parse_yices_results(results, input_vars, output_vars):
     if results.returncode != 0:
@@ -167,6 +199,7 @@ def add_distance_condition(path, distance, iteration):
             return new_path
     except FileNotFoundError:
         raise RuntimeError(f"File at '{new_path}' not found.")
+
 
 
 
