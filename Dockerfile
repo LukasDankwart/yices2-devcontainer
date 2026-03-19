@@ -1,5 +1,7 @@
 FROM ubuntu:22.04
 
+FROM python:3.11-slim
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
@@ -30,8 +32,12 @@ WORKDIR /opt/yices2_python_bindings
 RUN pip3 install .
 
 # ========== ONNX / ONNXRUNTIME / NUMPY / Z3 =========
+RUN pip install --upgrade pip
+
 RUN pip install --no-cache-dir z3-solver onnx onnxruntime numpy protobuf
 
+RUN pip install --no-cache-dir gurobipy
+RUN pip install --no-cache-dir enncode
 # =========== Marabou ============
 #WORKDIR /opt
 #RUN git clone https://github.com/NeuralNetworkVerification/Marabou.git
