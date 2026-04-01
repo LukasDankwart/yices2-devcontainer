@@ -1,9 +1,11 @@
+import numpy as np
 from z3 import *
 from enncode.gurobiModelBuilder import GurobiModelBuilder
 from gurobipy import GRB
 import gurobipy as gp
 from z3_examples.z3_gen_example import extract_mbp_core
-import time
+from queue import Queue
+from collections import deque
 
 import z3
 
@@ -56,6 +58,8 @@ def main():
             c_dist = gurobi_model.addConstr(gurobi_output_vars[target_idx] >= output_var + 0.001)
     e_solver.setObjective(dist_vars.sum(), GRB.MINIMIZE)
     e_solver.setParam("OutputFlag", 0)
+    # Set FOCUS to find optimal solutions!
+    e_solver.setParam("MIPFocus", 2)
 
     # Setup Z3 solver and formulas
     z3_formulas = z3.parse_smt2_file(smt_file)
@@ -66,6 +70,10 @@ def main():
 
     # Var Mapping (Z3Names : GurobiVar)
     r_vars_mapping = {f"r{idx}": gurobi_res_vars[idx] for idx in range(len(gurobi_res_vars))}
+
+    # DEBUGGING PURPOSE
+    last_dist = 0
+    last_dist_vals = deque()
 
     # Starting EF loop
     iteration = 1
@@ -81,6 +89,7 @@ def main():
             print(f"Gurobi (E-Solver) predicts: r = {current_r_vals}")
             current_distance = sum([abs(x) for x in current_r_vals[:7]])
             print(f"Gurobi (E-Solver) prediction of r has L1 distance: dist(r) = {current_distance}")
+            last_dist_vals.append(current_distance)
         else:
             print(f"Gurobi (E-Solver) replies UNSAT")
             break
@@ -113,6 +122,35 @@ def main():
             except z3.Z3Exception as e:
                 print(f"Z3 (F-Solver) raised error doing MBP: {e}")
 
+
+            """
+            # DEBUGGING PURPOSE
+            if last_dist - current_distance > 0.02 :
+                print(f"PROBLEM: Distance dropped from {last_dist} to {current_distance}")
+                exit()
+            last_dist = current_distance
+
+            # Check for convergence of the distance in last n iterations
+            print(f"Check convergence...")
+            last_n_distances = list(last_dist_vals)
+            dist_differences = np.array([abs(dist - current_distance) for dist in last_n_distances])
+            if np.max(dist_differences) < 0.02 and len(last_n_distances) >= 20:
+                print(f"Convergence assumed, check for counter example y: ")
+                verifier = z3.Solver()
+                final_r_subs = [(z3_r_vars[i], z3.RealVal(current_r_vals[i])) for i in range(7)]
+                phi_verified = z3.substitute(z3_original_phi, *final_r_subs)
+                verifier.add(z3_y >= -1.0, z3_y <= 1.0)
+                verifier.add(z3.Not(phi_verified))
+                result = verifier.check()
+                if result == z3.unsat:
+                    print(f"Correctness of r was verified!")
+                else:
+                    print(f"Verification failed. Verifier has found a counter example for y.")
+                    print(f"y = {float(verifier.model().eval(z3_y).as_fraction())}")
+            elif len(last_n_distances) >= 20:
+                last_dist_vals.popleft()
+            """
+
         else:
             print(f"Z3 (F-Solver) replies UNSAT")
             print(f"Last found 'r' is optimal CX: r = {current_r_vals} \n")
@@ -134,7 +172,6 @@ def main():
         #time.sleep(2)
         f_solver.pop()
         iteration += 1
-
 
 
 def add_gen_constraint_to_gurobi(gen_constraint, gurobi_model, gurobi_vars, eps=1e-5):

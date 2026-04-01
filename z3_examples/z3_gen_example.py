@@ -58,10 +58,11 @@ def extract_mbp_core(expr, f_model, r_substitution):
 
 def main():
     # Path to SMT of network
-    path = "z3_examples/gen_examples/z3_gen.smt2"
+    path = "z3_examples/gen_examples/z3_gen_fixed.smt2"
     parsed_formulas = z3.parse_smt2_file(path)
 
-    original_phi = parsed_formulas[0]
+    #original_phi = parsed_formulas[0]
+    original_phi = parsed_formulas
 
     # Reference variables in python
     r_vars = [z3.Real(f'r{i}') for i in range(7)]
@@ -71,6 +72,22 @@ def main():
     e_solver = z3.Optimize()
     f_solver = z3.Solver()
 
+    # Setup E-Solver
+    e_solver = z3.Optimize()
+    d_vars = [z3.Real(f'd_{i}') for i in range(len(r_vars))]
+    for r, d in zip(r_vars, d_vars):
+        e_solver.add(d >= r)
+        e_solver.add(d >= -r)
+    l1_norm_objective = z3.Sum(d_vars)
+    obj_handle = e_solver.minimize(l1_norm_objective)
+    e_solver.add(original_phi)
+
+    # Setup F-Solver
+    print(f"Original phi 0: {original_phi[0]}")
+    print(f"Original phi 1: {original_phi[1]}")
+    f_solver.add(original_phi[0])
+    f_solver.add(original_phi[1])
+
     # Variant with help variables t representing the abs
     """
     t_vars = [z3.Real(f't{i}') for i in range(7)]
@@ -79,8 +96,23 @@ def main():
         e_solver.add(t >= -r)
     l1_norm_objective = z3.Sum(t_vars)
     """
+
+    # Objective variant 1
+    """
     l1_norm_objective = z3.Sum([z3_abs(r) for r in r_vars])
     e_solver.minimize(l1_norm_objective)
+    """
+
+    # Objective variant 2
+    d_vars = [z3.Real(f'd_{i}') for i in range(len(r_vars))]
+    for r, d in zip(r_vars, d_vars):
+        e_solver.add(d >= r)
+        e_solver.add(d >= -r)
+    l1_norm_objective = z3.Sum(d_vars)
+    e_solver.minimize(l1_norm_objective)
+
+    last_gens = []
+    last_dist = []
 
     iteration = 1
     while True:
@@ -90,12 +122,23 @@ def main():
             e_model = e_solver.model()
 
             current_r_vals = [e_model.eval(r, model_completion=True) for r in r_vars]
+            current_y = float(e_model.eval(y).as_fraction())
+            print(f"CURRENT y for Model: {current_y}")
 
-            r_floats = [float(val.as_fraction()) if z3.is_rational_value(val) else 0.0 for val in current_r_vals]
+            r_floats = [float(val.as_fraction()) if z3.is_rational_value(val) else val.approx(10) for val in current_r_vals]
             print(f"E-Solver predicts: r = {r_floats}")
 
             current_l1 = e_model.eval(l1_norm_objective, model_completion=True)
             print(f"Current L1-Norm (Costs): {float(current_l1.as_fraction())}")
+            last_dist.append(float(current_l1.as_fraction()))
+
+            #current_l1 = obj_handle.value()
+            #if not (z3.is_int_value(current_l1) or z3.is_rational_value(current_l1) or z3.is_arith(current_l1)):
+            #    current_l1 = current_l1.approx(10)
+            #print(f"Current L1-Norm (Costs): {current_l1}")
+
+            last_dist.append(current_l1)
+
         else:
             print(f"UNSAT! No CX found for implicant: {original_phi}")
             break
@@ -106,7 +149,8 @@ def main():
         # Defines substitution from r0 -> assignment of r0 .... for all r vars
         r_substitution = list(zip(r_vars, current_r_vals))
 
-        phi_with_current_r = z3.substitute(original_phi, *r_substitution)
+        r_formula = original_phi[2]
+        phi_with_current_r = z3.substitute(r_formula, *r_substitution)
 
         f_solver.add(z3.Not(phi_with_current_r))
 
@@ -115,7 +159,10 @@ def main():
             bad_y_val = f_model.eval(y, model_completion=True)
             print(f"F-Solver found Counterexample: y = {float(bad_y_val.as_fraction())}")
 
-            error_formula = z3.Not(original_phi)
+            # TODO: Hier darf nur das Subformula übergeben werden, aus dem der Kern bestimmt werden soll (f1 >= f0)!
+            #error_formula = z3.Not(original_phi)
+            #error_formula = z3.And(original_phi[0], original_phi[1], z3.Not(original_phi[2]))
+            error_formula = z3.Not(original_phi[2])
             linear_core = extract_mbp_core(error_formula, f_model, r_substitution)
 
             exists_error = z3.Exists([y], linear_core)
@@ -124,9 +171,16 @@ def main():
             try:
                 bad_space_for_r = mbp_tactic(exists_error).as_expr()
                 gen_constraint = z3.Not(bad_space_for_r)
+                print(gen_constraint)
                 e_solver.add(gen_constraint)
                 print(f"-> MBP successful! New gen constraint was added.")
-
+                last_gens.append(gen_constraint)
+                """
+                if len(last_dist) >= 2 and last_dist[-1] < last_dist[-2]:
+                    print(f"previous gen constraint: {last_gens[-2]}")
+                    print(f"new gen constraint: {last_gens[-1]}")
+                    exit()
+                """
             except z3.Z3Exception as e:
                 print(f"-> Z3 error while MBP: {e}")
         else:
@@ -135,7 +189,7 @@ def main():
             print(f"\n Start verification of r being valid for all y: ")
             verifier = z3.Solver()
             final_r_subs = [(r_vars[i], z3.RealVal(r_floats[i])) for i in range(7)]
-            phi_verified = z3.substitute(original_phi, *final_r_subs)
+            phi_verified = z3.substitute(original_phi[2], *final_r_subs)
             verifier.add(y >= -1.0, y <= 1.0)
             verifier.add(z3.Not(phi_verified))
             result = verifier.check()

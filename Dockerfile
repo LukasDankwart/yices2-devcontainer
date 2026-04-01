@@ -38,6 +38,11 @@ RUN pip install --no-cache-dir z3-solver onnx onnxruntime numpy protobuf
 
 RUN pip install --no-cache-dir gurobipy
 RUN pip install --no-cache-dir enncode
+
+# Load Gurobi licence
+COPY gurobi.lic /opt/gurobi/gurobi.lc
+ENV GRB_LICENSE_FILE=/opt/gurobi/gurobi.lc
+
 # =========== Marabou ============
 #WORKDIR /opt
 #RUN git clone https://github.com/NeuralNetworkVerification/Marabou.git
