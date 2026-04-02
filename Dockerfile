@@ -36,8 +36,8 @@ RUN pip install --upgrade pip
 
 RUN pip install --no-cache-dir z3-solver onnx onnxruntime numpy protobuf
 
-RUN pip install --no-cache-dir gurobipy
-RUN pip install --no-cache-dir enncode
+RUN pip install gurobipy
+#RUN pip install --no-cache-dir enncode
 
 # Load Gurobi licence
 COPY gurobi.lic /opt/gurobi/gurobi.lc
@@ -53,9 +53,9 @@ ENV GRB_LICENSE_FILE=/opt/gurobi/gurobi.lc
 #WORKDIR /opt/Marabou/build
 #RUN cmake .. && cmake --build . -j 4
 
-ENV PYTHONPATH="/opt/Marabou"
+#ENV PYTHONPATH="/opt/Marabou"
 
-RUN pip install maraboupy
+#RUN pip install maraboupy
 
 WORKDIR /workspace
 

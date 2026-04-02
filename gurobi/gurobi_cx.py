@@ -1,6 +1,6 @@
 import numpy as np
 from z3 import *
-from enncode.gurobiModelBuilder import GurobiModelBuilder
+#from enncode.gurobiModelBuilder import GurobiModelBuilder
 from gurobipy import GRB
 import gurobipy as gp
 from z3_examples.z3_gen_example import extract_mbp_core
@@ -339,7 +339,7 @@ def enforce(node, gurobi_model, gurobi_vars):
             is_not = z3.is_not(child)
             ineq_node = child.children()[0] if is_not else child
 
-            # Indikator Constraint: b == 1 -> Ungleichung gilt
+            # Inequality holds
             gurobi_ineq = get_gurobi_ineq(is_not, ineq_node, gurobi_vars)
             gurobi_model.addGenConstrIndicator(b, True, gurobi_ineq)
 
