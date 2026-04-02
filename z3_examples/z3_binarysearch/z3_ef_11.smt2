@@ -183,7 +183,7 @@
   (forall ((y Real))
     (=>
       (and (>= y (- 1.0)) (<= y 1.0))
-      ( >
+      ( >=
         (OutputNeuron_0_idx1
            (+ (- 0.021025) r0)
            (+ (- 1.043187) r1)
@@ -212,6 +212,6 @@
 (define-fun total_distance () Real
   (+ (abs r0) (abs r1) (abs r2) (abs r3) (abs r4) (abs r5) (abs r6)))
 ; --- Define distance condition
-(assert (<= total_distance 4.126898190116963)) 
+(assert (<= total_distance 4.125976562499997)) 
 (check-sat)
 (get-model)

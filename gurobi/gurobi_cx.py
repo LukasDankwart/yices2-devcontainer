@@ -22,7 +22,7 @@ concrete_input = [
 
 def main():
     onnx_path = "yices_ws/networks/concrete/classifier_medium.onnx"
-    smt_file = "z3_examples/gen_examples/z3_gen.smt2"
+    smt_file = "z3_examples/gen_examples/z3_gen_fixed.smt2"
 
     # Setup gurobi instance
     model_builder = GurobiModelBuilder(onnx_path)
@@ -63,10 +63,12 @@ def main():
 
     # Setup Z3 solver and formulas
     z3_formulas = z3.parse_smt2_file(smt_file)
-    z3_original_phi = z3_formulas[0]
+    z3_original_phi = z3_formulas
     z3_r_vars = [z3.Real(f'r{i}') for i in range(7)]
     z3_y = z3.Real('y')
     f_solver = z3.Solver()
+    f_solver.add(z3_original_phi[0])
+    f_solver.add(z3_original_phi[1])
 
     # Var Mapping (Z3Names : GurobiVar)
     r_vars_mapping = {f"r{idx}": gurobi_res_vars[idx] for idx in range(len(gurobi_res_vars))}
@@ -99,7 +101,7 @@ def main():
         # Substitute r vars by their assignment found by gurobi in Z3 instance (skip last r cause it is the y)
         z3_current_r = [z3.RealVal(r) for r in current_r_vals[:7]]
         z3_r_substitution = list(zip(z3_r_vars, z3_current_r))
-        z3_phi_current_r = z3.substitute(z3_original_phi, *z3_r_substitution)
+        z3_phi_current_r = z3.substitute(z3_original_phi[2], *z3_r_substitution)
         f_solver.add(z3.Not(z3_phi_current_r))
 
         print("\n Call Z3 (F-Solver) for current r...")
@@ -108,7 +110,7 @@ def main():
             counter_y = f_model.eval(z3_y, model_completion=True)
             print(f"Z3 (F-Solver) found SAT assignment to y (CounterExample): y = {float(counter_y.as_fraction())}")
 
-            error_formula = z3.Not(z3_original_phi)
+            error_formula = z3.Not(z3_original_phi[2])
             linear_core = extract_mbp_core(error_formula, f_model, z3_r_substitution)
 
             exists_error = z3.Exists([z3_y], linear_core)
@@ -157,12 +159,18 @@ def main():
             print(f"\n Start verification of r being valid for all y: ")
             verifier = z3.Solver()
             final_r_subs = [(z3_r_vars[i], z3.RealVal(current_r_vals[i])) for i in range(7)]
-            phi_verified = z3.substitute(z3_original_phi, *final_r_subs)
+            phi_verified = z3.substitute(z3_original_phi[2], *final_r_subs)
             verifier.add(z3_y >= -1.0, z3_y <= 1.0)
             verifier.add(z3.Not(phi_verified))
             result = verifier.check()
             if result == z3.unsat:
                 print(f"Correctness of r was verified!")
+                if e_solver.SolCount > 0:
+                    print(f"Found objective value: {e_solver.ObjVal}")
+                    print(f"Theoretical best bound: {e_solver.ObjBound}")
+                    print(f"MIPGap: {e_solver.MIPGap * 100:.2f}")
+
+
             else:
                 print(f"Verification failed. Verifier has found a counter example for y.")
                 print(f"y = {float(verifier.model().eval(z3_y).as_fraction())}")
@@ -172,6 +180,56 @@ def main():
         #time.sleep(2)
         f_solver.pop()
         iteration += 1
+
+def check_optimum(dist_threshold):
+    #TODO: Basically nonsense, gurobi cant manually show optimality for given r over all y in (lb,ub)
+    onnx_path = "yices_ws/networks/concrete/classifier_medium.onnx"
+    model_builder = GurobiModelBuilder(onnx_path)
+    model_builder.build_model()
+    gurobi_model = model_builder.get_gurobi_model()
+    e_solver = gurobi_model
+    # Define gurobi Vars and objective for optimization
+    gurobi_input_vars = model_builder.get_input_vars()
+    gurobi_output_vars = model_builder.get_output_vars()
+    dist_vars = gurobi_model.addVars(len(gurobi_input_vars) - 1, name="dist_vars")
+    gurobi_res_vars = [e_solver.addVar(name=f"r{i}") for i in range(len(gurobi_input_vars) - 1)]
+    for (idx, (name, var)) in enumerate(gurobi_input_vars.items()):
+        # Every input var 0...6 is fixed to concrete input; input var 7 represents missing input between -1 and 1
+        if idx == 7:
+            e_solver.addConstr(var >= -1.0, f"{name}_lb")
+            e_solver.addConstr(1.0 >= var, f"{name}_lb")
+            continue
+        dist_var = dist_vars[idx]
+        res_var = gurobi_res_vars[idx]
+        e_solver.addConstr(var == concrete_input[idx] + res_var, f"{name}_concrete_input")
+        # e_solver.addConstr(concrete_input[idx] >= var, f"{name}_ub")
+
+        # Encode dist_L1 = | res_var - input_val |
+        e_solver.addConstr(dist_var >= res_var - concrete_input[idx])
+        e_solver.addConstr(dist_var >= concrete_input[idx] - res_var)
+
+    # Define post condition: output1 >= output0
+    target_class = 1
+    target_idx = list(gurobi_output_vars.keys())[target_class]
+    for flat_idx, (_, output_var) in enumerate(gurobi_output_vars.items()):
+        if target_class != flat_idx:
+            c_dist = gurobi_model.addConstr(gurobi_output_vars[target_idx] >= output_var + 0.001)
+
+    # Final check if model exists, with distance smaller given threshold
+    l1_distance_expr = gp.quicksum(dist_vars)
+    e_solver.addConstr(l1_distance_expr <= dist_threshold)
+    e_solver.setObjective(dist_vars.sum(), GRB.MINIMIZE)
+    e_solver.setParam("MIPFocus", 1)
+    e_solver.Params.SolutionLimit = 1
+    e_solver.optimize()
+    if e_solver.Status == GRB.OPTIMAL:
+        print(f"UNSAT: Gurobi couldn't find a model for with less distance then {dist_threshold}.")
+    elif e_solver.Status == GRB.OPTIMAL or e_solver.Status == GRB.SOLUTION_LIMIT:
+        print(f"SAT: Previous found model for CX is not optimal!")
+        better_r_vals = [v.X for v in gurobi_input_vars.values()]
+        print(better_r_vals)
+    else:
+        print(f"Gurobi canceled with status: {e_solver.Status}")
 
 
 def add_gen_constraint_to_gurobi(gen_constraint, gurobi_model, gurobi_vars, eps=1e-5):

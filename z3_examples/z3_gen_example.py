@@ -171,7 +171,6 @@ def main():
             try:
                 bad_space_for_r = mbp_tactic(exists_error).as_expr()
                 gen_constraint = z3.Not(bad_space_for_r)
-                print(gen_constraint)
                 e_solver.add(gen_constraint)
                 print(f"-> MBP successful! New gen constraint was added.")
                 last_gens.append(gen_constraint)
