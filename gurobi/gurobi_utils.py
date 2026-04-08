@@ -3,15 +3,16 @@ from gurobipy import GRB
 import gurobipy as gp
 from z3 import *
 
-def add_gen_constraint_to_gurobi(gen_constraint, gurobi_model, gurobi_vars, eps=1e-5):
+def add_gen_constraint_to_gurobi(gen_constraint, gurobi_model, gurobi_vars, eps=1e-4):
     goal = z3.Goal()
     goal.add(gen_constraint)
 
     # Transformation into Negation Normalform
-    nnf_goal = z3.Tactic('nnf')(goal)[0]
+    tactic = z3.Then(z3.Tactic('nnf'), z3.Tactic('tseitin-cnf'))
+    cnf_goal = tactic(goal)[0]
 
     # Enforce gurobi encoding of the Z3 expression
-    for expr in nnf_goal:
+    for expr in cnf_goal:
         enforce(expr, gurobi_model, gurobi_vars, eps)
 
     gurobi_model.update()
@@ -59,7 +60,7 @@ def parse_arith(node, gurobi_vars):
         raise ValueError(f"Unknown math-type of node: {node} (Z3-Declaration: {node.decl()})")
 
 
-def get_gurobi_ineq(is_not, ineq_node, gurobi_vars, eps=1e-5):
+def get_gurobi_ineq(is_not, ineq_node, gurobi_vars, eps=1e-4):
     """ Translates strict inequalities to Gurobi-inequalities with epsilon deviation """
     lhs = parse_arith(ineq_node.children()[0], gurobi_vars)
     rhs = parse_arith(ineq_node.children()[1], gurobi_vars)
@@ -113,15 +114,17 @@ def enforce(node, gurobi_model, gurobi_vars, eps):
             ineq_node = child.children()[0] if is_not else child
 
             # Indikator Constraint: b == 1 -> Ungleichung gilt
-            gurobi_ineq = get_gurobi_ineq(is_not, ineq_node, gurobi_vars)
+            gurobi_ineq = get_gurobi_ineq(is_not, ineq_node, gurobi_vars, eps)
             gurobi_model.addGenConstrIndicator(b, True, gurobi_ineq)
 
         # At least one binary var has to be true (1)
         gurobi_model.addConstr(gp.quicksum(bin_vars) >= 1)
+        gurobi_model.update()
 
     else:
         # Single unequality (leaf) of the tree
         is_not = z3.is_not(node)
         ineq_node = node.children()[0] if is_not else node
-        gurobi_ineq = get_gurobi_ineq(is_not, ineq_node, gurobi_vars)
+        gurobi_ineq = get_gurobi_ineq(is_not, ineq_node, gurobi_vars, eps)
         gurobi_model.addConstr(gurobi_ineq)
+        gurobi_model.update()

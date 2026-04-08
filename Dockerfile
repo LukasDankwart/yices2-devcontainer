@@ -39,6 +39,8 @@ RUN pip install --no-cache-dir z3-solver onnx onnxruntime numpy protobuf
 RUN pip install gurobipy
 #RUN pip install --no-cache-dir enncode
 
+RUN pip install pandas
+
 # Load Gurobi licence
 COPY gurobi.lic /opt/gurobi/gurobi.lc
 ENV GRB_LICENSE_FILE=/opt/gurobi/gurobi.lc

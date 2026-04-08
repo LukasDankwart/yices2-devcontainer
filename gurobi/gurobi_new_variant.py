@@ -3,22 +3,14 @@ from z3 import *
 from gurobipy import GRB
 import gurobipy as gp
 from z3_examples.z3_gen_example import extract_mbp_core
+from fractions import Fraction
 
 from gurobi_utils import *
 
 
 import z3
 
-concrete_input = [
-        -0.021025,
-        -1.043187,
-        0.300265,
-        0.570702,
-        -1.124416,
-        -1.794718,
-        0.569139,
-        -0.361468
-]
+
 def main():
     concrete_input = [
         -0.021025,
@@ -47,11 +39,14 @@ def main():
 
     # Setup solvers
     # E-Optimizer: minimize distances | r_i - x_i | (y remains unknown)
+    e_solver = gp.Model("e_solver")
     gurobi_r_vars = [e_solver.addVar(lb=-200.0, ub=200.0, name=f"r{i}") for i in range(7)]
     dist_vars = e_solver.addVars(len(gurobi_r_vars), name="d_vars")
     for (idx, (r_var, d_var)) in enumerate(zip(gurobi_r_vars, dist_vars.values())):
-        e_solver.addConstr(d_var >= r_var - concrete_input[idx])
-        e_solver.addConstr(d_var >= concrete_input[idx] - r_var)
+        #e_solver.addConstr(d_var >= r_var - concrete_input[idx])
+        #e_solver.addConstr(d_var >= concrete_input[idx] - r_var)
+        e_solver.addConstr(d_var >= r_var)
+        e_solver.addConstr(d_var >= -r_var)
     e_solver.setObjective(dist_vars.sum(), GRB.MINIMIZE)
     e_solver.setParam("OutputFlag", 0)
     # Set FOCUS to find optimal solutions!
@@ -69,6 +64,7 @@ def main():
 
     # Var Mapping (Z3Names : GurobiVar)
     r_vars_mapping = {f"r{idx}": gurobi_r_vars[idx] for idx in range(len(gurobi_r_vars))}
+    gen_constraints = []
 
     iteration = 1
     while True:
@@ -89,7 +85,7 @@ def main():
         # (F-Solver)
         f_solver.push()
         # Substitute r vars by their assignment found by gurobi in Z3 instance (skip last r cause it is the y)
-        z3_current_r = [z3.RealVal(str(round(r, 6))) for r in current_r_vals]
+        z3_current_r = [z3.RealVal(Fraction(r).limit_denominator()) for r in current_r_vals]
         z3_r_substitution = list(zip(z3_r_vars, z3_current_r))
         z3_phi_current_r = z3.substitute(post_cond, *z3_r_substitution)
         f_solver.add(z3.Not(z3_phi_current_r))
@@ -108,7 +104,17 @@ def main():
             try:
                 bad_space_for_r = mbp_tactic(exists_error).as_expr()
                 gen_constraint = z3.Not(bad_space_for_r)
+                """
+                test_eval = z3.simplify(z3.substitute(gen_constraint, *z3_r_substitution))
+                print(f"Check if current gen-constraint excludes current r : {test_eval}")
+                if z3.is_true(test_eval):
+                    print("ERROR: Current r is not excluded by new gen-constraint. Indicates MBP error!")
+                    exit()
+                """
                 add_gen_constraint_to_gurobi(gen_constraint, e_solver, r_vars_mapping)
+
+                gen_constraints.append(gen_constraint)
+                gen_constraint_validation(gen_constraints, z3_r_substitution)
 
             except z3.Z3Exception as e:
                 print(f"Z3 (F-Solver) raised error doing MBP: {e}")
@@ -140,6 +146,16 @@ def main():
         #time.sleep(2)
         f_solver.pop()
         iteration += 1
+
+
+def gen_constraint_validation(gen_constraints, substitution):
+    gen_search_space = z3.And(*gen_constraints)
+    test_eval = z3.simplify(z3.substitute(gen_search_space, *substitution))
+    if z3.is_true(test_eval):
+        print(f"Current r is NOT excluded from generalized search space.")
+        exit()
+    else:
+        print(f"Current r is excluded from generalized search space.")
 
 
 if __name__ == '__main__':

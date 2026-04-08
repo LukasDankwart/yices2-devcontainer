@@ -129,8 +129,12 @@ def main():
                         current_r_vals]
             print(f"E-Solver predicts: r = {r_floats}")
 
-            current_l1 = e_model.eval(l1_norm_objective, model_completion=True)
-            print(f"Current L1-Norm (Costs): {float(current_l1.as_fraction())}")
+            #current_l1 = e_model.eval(l1_norm_objective, model_completion=True)
+            #print(f"Current L1-Norm (Costs): {float(current_l1.as_fraction())}")
+
+            cost = eval_costs(r_floats, concrete_input)
+            print(f"Current L1-Norm (Costs): {cost}")
+
         else:
             print(f"UNSAT: E-Solver couldn't find candidates for r!")
 
@@ -156,7 +160,16 @@ def main():
                 bad_space_r = mbp_tactic(exists_error).as_expr()
                 gen_constraint = z3.Not(bad_space_r)
                 #e_solver.add(gen_constraint)
+                """
+                test_eval = z3.simplify(z3.substitute(gen_constraint, *r_substitution))
+                print(f"Check if current gen-constraint excludes current r : {test_eval}")
+                if z3.is_true(test_eval):
+                    print("ERROR: Current r is not excluded by new gen-constraint. Indicates MBP error!")
+                    exit()
+                """
                 gen_constraints.append(gen_constraint)
+
+                gen_constraint_validation(gen_constraints, r_substitution)
                 print(f"-> MPB successful! New gen constraint added to E-solver. \n")
             except z3.Z3Exception as e:
                 print(f"-> Error while doing MBP: {e}")
@@ -182,6 +195,22 @@ def main():
         f_solver.pop()
         iteration += 1
 
+
+def gen_constraint_validation(gen_constraints, substitution):
+    gen_search_space = z3.And(*gen_constraints)
+    test_eval = z3.simplify(z3.substitute(gen_search_space, *substitution))
+    if z3.is_true(test_eval):
+        print(f"Current r is NOT excluded from generalized search space.")
+        exit()
+    else:
+        print(f"Current r is excluded from generalized search space.")
+
+
+def eval_costs(r_substitution, concrete_inputs):
+    diffs = []
+    for idx, r_val in enumerate(r_substitution):
+        diffs.append(abs(concrete_inputs[idx] + r_val))
+    return sum(diffs)
 
 if __name__ == "__main__":
     main()
