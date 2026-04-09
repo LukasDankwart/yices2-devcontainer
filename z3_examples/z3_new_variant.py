@@ -121,8 +121,8 @@ def main():
 
         if e_solver.check() == z3.sat:
             e_model = e_solver.model()
-
-            print(f"Z3 obj: {obj_handle.value()}")
+            obj_val = obj_handle.value()
+            print(f"Z3 obj: {obj_val}")
 
             current_r_vals = [e_model.eval(r, model_completion=True) for r in r_vars]
             r_floats = [float(val.as_fraction()) if z3.is_rational_value(val) else val.approx(10) for val in

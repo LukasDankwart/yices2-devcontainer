@@ -3,7 +3,7 @@ from gurobipy import GRB
 import gurobipy as gp
 from z3 import *
 
-def add_gen_constraint_to_gurobi(gen_constraint, gurobi_model, gurobi_vars, eps=1e-4):
+def add_gen_constraint_to_gurobi(gen_constraint, gurobi_model, gurobi_vars, eps=1e-3):
     goal = z3.Goal()
     goal.add(gen_constraint)
 
@@ -60,7 +60,7 @@ def parse_arith(node, gurobi_vars):
         raise ValueError(f"Unknown math-type of node: {node} (Z3-Declaration: {node.decl()})")
 
 
-def get_gurobi_ineq(is_not, ineq_node, gurobi_vars, eps=1e-4):
+def get_gurobi_ineq(is_not, ineq_node, gurobi_vars, eps=1e-3):
     """ Translates strict inequalities to Gurobi-inequalities with epsilon deviation """
     lhs = parse_arith(ineq_node.children()[0], gurobi_vars)
     rhs = parse_arith(ineq_node.children()[1], gurobi_vars)

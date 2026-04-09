@@ -124,7 +124,7 @@ def z3_ef_variant(missing_input_idx, target_class, concrete_input, output_vars, 
         obj_handle = e_solver.minimize(l1_norm_objective)
         for gen_constraint in generalized_constraints:
             e_solver.add(gen_constraint)
-
+        print(f"E-Solver setup done, start checking...")
         if e_solver.check() == z3.sat:
             e_model = e_solver.model()
             print(f"Z3 obj: {obj_handle.value()}")
@@ -146,18 +146,42 @@ def z3_ef_variant(missing_input_idx, target_class, concrete_input, output_vars, 
             f_model = f_solver.model()
             y_counter_example = float(f_model.eval(y_var, model_completion=True).as_fraction())
             print(f"F-Solver found counter example: y = {y_counter_example}")
+            #error_formula = z3.And(lb_y, ub_y, z3.Not(post_cond))
+            error_formula = z3.Not(post_cond)
 
-            error_formula = z3.And(lb_y, ub_y, z3.Not(post_cond))
+            """ VARIANT with Pointwise Blocking 
+            print(f"F-Solver performs pointwise blocking...")
             linear_core = extract_mbp_core(error_formula, f_model, r_substitution)
+            y_val_z3 = f_model.eval(y_var, model_completion=True)
+            blocked_r_space = z3.substitute(linear_core, [(y_var, y_val_z3)])
+            blocked_r_condition = z3.Not(blocked_r_space)
+            generalized_constraints.append(blocked_r_condition)
+            if contains_variable(y_var, blocked_r_condition):
+                raise RuntimeError(f"After pointwise blocking the blocked r space shouldn't contain 'y_var'!")
+            print(f"-> Pointwise blocking successful! New constraint added to E-Solver.")
+            """
 
+            """ VARIANT with Linear Core extraction + QE 
+            """
+            linear_core = extract_mbp_core(error_formula, f_model, r_substitution)
+            print(f"Core extracted!")
+            print(f"Linear core contains 'y': {contains_variable(linear_core, y_var)}")
             exists_error = z3.Exists([y_var], linear_core)
-            mbp_tactic = z3.Then(z3.Tactic("simplify"), z3.Tactic("qe"))
-
+            mbp_tactic = z3.Then(
+                z3.Tactic("simplify"),
+                z3.Tactic("propagate-values"),
+                z3.Tactic("ctx-solver-simplify"),
+                z3.Tactic("qe-light"),
+                z3.Tactic("qe"),
+                z3.Tactic("simplify")
+            )
+            print(f"Start quantifier elimination...!")
             try:
                 bad_space_r = mbp_tactic(exists_error).as_expr()
+                print(f"Bad space projected!")
                 gen_constraint = z3.Not(bad_space_r)
                 generalized_constraints.append(gen_constraint)
-                gen_constraint_validation(generalized_constraints, r_substitution)
+                #gen_constraint_validation(generalized_constraints, r_substitution)
                 print(f"-> MPB successful! New gen constraint added to E-solver. \n")
             except z3.Z3Exception as e:
                 print(f"-> Error while doing MBP: {e}")
@@ -195,6 +219,26 @@ def parse_concrete_inputs(csv_path):
             float_line = [float(x) for x in line]
             lines.append(float_line)
     return lines
+
+
+def contains_variable(expr, variable):
+    visited = set()
+    target_name = variable.decl().name()
+    return walk(expr, visited, target_name)
+
+
+def walk(e, visited, target_name):
+    e_id = e.get_id()
+    if e_id in visited:
+        return False
+    visited.add(e_id)
+    if z3.is_const(e):
+        return e.decl().name() == target_name
+
+    for child in e.children():
+        if walk(child, visited, target_name):
+            return True
+    return False
 
 
 if __name__ == "__main__":

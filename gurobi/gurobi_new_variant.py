@@ -112,7 +112,6 @@ def main():
                     exit()
                 """
                 add_gen_constraint_to_gurobi(gen_constraint, e_solver, r_vars_mapping)
-
                 gen_constraints.append(gen_constraint)
                 gen_constraint_validation(gen_constraints, z3_r_substitution)
 
